@@ -18,8 +18,8 @@ Official PyTorch implementation of **Adaptive Otsu Saliency (AOS)**, an automate
 AOS is built as a direct extension of **SalUn** ([Fan et al., 2024](https://arxiv.org/abs/2310.12508)), replacing its static, global saliency threshold with a **dynamic, layer-wise statistical formulation**. 
 
 At a **50% forget ratio** on CIFAR-100 (ResNet-18), AOS delivers:
-- 📈 **+6.2% Retain Accuracy** (83.4% vs 77.2%)
-- 📉 **-37% Stability Variance** (0.014 vs 0.024)
+- 📈 **+6.2 percentage points (pp) Retain Accuracy** (83.4% vs 77.2%, an **+8.0% relative improvement**)
+- 📉 **-41.7% Stability Variance** (0.014 vs 0.024; up to **~37–42% reduction** across unlearning baselines)
 - ⚡ **-8% Runtime** due to faster convergence
 
 | Feature | Original SalUn | AOS (Ours) | Benefit |
@@ -222,7 +222,7 @@ flowchart TD
 | **SalUn** [9] *(ICLR '24)* | Saliency Masking | Fixed (τ) | 77.2% | 8.3% | 0.024 | Manual grid search on τ |
 | **AOS (Ours)** | **Statistical Masking** | **Adaptive Otsu** | **83.4%** | **7.8%** | **0.014** | **Zero threshold tuning** |
 
-> **Key Performance Advantage**: AOS achieves **+6.2% Retain Accuracy** over SalUn and **+4.3%** over AMU while reducing stability variance by **37%** (0.014 vs. 0.024), effectively matching the utility of exact retraining without requiring manual threshold hyperparameter search.
+> **Key Performance Advantage**: At 50% forgetting on CIFAR-100, AOS achieves **83.4% Retain Accuracy** (+6.2 percentage points / +8.0% relative gain over SalUn, and +4.3 pp over AMU), while reducing stability variance from **0.024 down to 0.014** (a **41.7% reduction** in optimization instability). This substantially narrows the performance gap to exact retraining (within 2.2% of the 85.61% theoretical upper bound) while eliminating manual threshold hyperparameter search.
 
 ---
 
@@ -272,7 +272,7 @@ flowchart TD
 | **AOS-R** | Retention Scaling Only | 8.2 | 82.5 | 0.015 |
 | **AOS (Full)** | Complete Framework | **7.8** | **83.4** | **0.014** |
 
-> **Key Takeaway**: At 50% forgetting, AOS achieves **7.8% Forget Accuracy ($\downarrow$)** while sustaining **83.4% Retain Accuracy ($\uparrow$)** (+6.2% over SalUn and +4.3% over AMU), with a **37% reduction in variance ($\downarrow$)** and **8% runtime reduction ($\downarrow$)** via earlier convergence.
+> **Key Takeaway**: At 50% forgetting, AOS achieves **7.8% Forget Accuracy ($\downarrow$)** while sustaining **83.4% Retain Accuracy ($\uparrow$)** (+6.2 pp over SalUn and +4.3 pp over AMU), with a **41.7% reduction in variance ($\downarrow$)** (0.014 vs. 0.024) and **8% runtime reduction ($\downarrow$)** via earlier convergence. Across higher forget splits (60%–80%) and relative to unregularized gradient ascent (GA), AOS preserves up to **10–15% higher retain accuracy**.
 
 ---
 
