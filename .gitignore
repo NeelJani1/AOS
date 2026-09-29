@@ -1,22 +1,30 @@
 __pycache__/
+*.pyc
+*.pyo
 hello.x
 *.pth
 *.pth.tar
 *.pt
 *.bin
+*.ckpt
+*.safetensors
+
+# Data and large directories
 results/
 checkpoints/
 saved_models*/
 unlearned_models/
-*.Identifier
+imagenette_without_label_0/
+DDPM/logs/
+SD/models/
+logs/
 
+# NTFS / WSL alternate data stream metadata
+*.Identifier
+*Zone.Identifier*
+
+# Media files
 *.JPEG
 *.jpg
 *.png
-*.pt
-*.pth
-*.pth.tar
-imagenette_without_label_0/
-results/
-checkpoints/
-
+*.gif
