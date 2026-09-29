@@ -1,6 +1,6 @@
 # Adaptive Otsu Unlearning (AOS)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Dual](https://img.shields.io/badge/License-Dual_License-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
 [![Institution](https://img.shields.io/badge/Institution-University%20of%20Auckland-003366.svg)](https://www.auckland.ac.nz/)
@@ -107,7 +107,6 @@ flowchart TD
         Df[Forget Set D_f]
         Dr[Retain Set D_r]
     end
-
     subgraph AOS [2. AOS Engine]
         Grad[Forget Gradient Energy]
         FIM[Fisher Information]
@@ -115,13 +114,11 @@ flowchart TD
         Otsu[Otsu Variance Maximization]
         Mask[Binary Saliency Mask M_i]
     end
-
     subgraph Exec [3. Unlearning Execution]
         Scale[Retention Ratio]
         Update[Gated Parameter Update]
         Consol[Knowledge Consolidation]
     end
-
     W0 & Df --> Grad
     W0 & Dr --> FIM
     Grad & FIM --> Norm
@@ -131,34 +128,49 @@ flowchart TD
     Update --> Consol
 ```
 
-### Algorithm Summary
-```python
-# Pseudo-code for Adaptive Otsu Unlearning (AOS)
-for epoch in range(epochs):
-    # Phase A: Saliency & Curvature
-    saliency = compute_gradient_energy(model, D_f)
-    fim = compute_fisher_information(model, D_r)
-    s_norm = saliency / torch.sqrt(fim + epsilon)
-    
-    # Phase B: Otsu Variance Maximization
-    for layer in model.layers:
-        tau_otsu = get_otsu_threshold(s_norm[layer])
-        tau_active = anneal(tau_otsu, tau_init, epoch)
-        mask[layer] = s_norm[layer] > tau_active
-        
-    # Phase C: Gated Update
-    lambda_c = compute_retention_scale(model, D_r, D_f)
-    model.weights += lr * lambda_c * mask * compute_forget_grads(model, D_f)
-    
-    # Phase D: Retain Consolidation
-    model = sgd_retain_step(model, D_r)
-```
+### Formal Algorithmic Specification
+
+**Algorithm 1:** Adaptive Otsu Saliency (AOS) Unlearning Framework
+***
+**Input:**
+- Pretrained model weights $W_0$
+- Forget dataset $\mathcal{D}_f$, Retain dataset $\mathcal{D}_r$
+- Learning rate $\eta$, Annealing constant $T_a$, Histogram resolution $B$ (default: 128)
+- Target retention bounds $[\tau_{\min}, \tau_{\max}]$, Unlearning regime $M \in \{\text{GA, FT, RL}\}$
+
+**Output:**
+- Unlearned model weights $W^*$
+***
+1. Initialize per-layer percentile threshold $\tau_{\text{init}}^{(l)}$ for all layers $l = 1, \dots, L$
+2. **for** each unlearning epoch $t = 1$ to $T$ **do**
+   - *// Phase A: Saliency and Curvature Estimation*
+   3. Compute raw forget-set saliencies $s_i^{(l)} = \left\| \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}} \right\|^2$ for each weight
+   4. Estimate empirical Fisher information on retain data: $F_i^{(l)} = \mathbb{E}_{(x,y) \sim \mathcal{D}_r} \left[ \left(\frac{\partial \log p(y|x; W)}{\partial w_i^{(l)}}\right)^2 \right]$
+   5. Compute curvature-normalized saliency: $\tilde{s}_i^{(l)} = \frac{s_i^{(l)}}{\sqrt{F_i^{(l)} + \epsilon}}$
+   - *// Phase B: Adaptive Otsu Variance Maximization*
+   6. **for** each layer $l = 1$ to $L$ **do**
+      7. Construct 1D normalized saliency histogram $\mathcal{H}^{(l)}(\tilde{s})$ with $B$ bins
+      8. Compute optimal Otsu threshold maximizing between-class variance: $\tau_{\text{Otsu}}^{(l)} = \arg\max_{\tau} \omega_0(\tau) \omega_1(\tau) \left[ \mu_0(\tau) - \mu_1(\tau) \right]^2$
+      9. Apply dynamic annealing: $\tau_t^{*(l)} = \alpha_t \tau_{\text{init}}^{(l)} + (1 - \alpha_t) \tau_{\text{Otsu}}^{(l)}$ where $\alpha_t = \exp\left(-\frac{t}{T_a}\right)$
+      10. Verify empirical retention rate $r_{\text{emp}} = \frac{1}{|W^{(l)}|} \sum \mathbb{I}\left[\tilde{s}_i^{(l)} > \tau_t^{*(l)}\right]$
+      11. **if** $r_{\text{emp}} \notin [\tau_{\min}, \tau_{\max}]$ **then** calibrate $\tau_t^{*(l)}$ to boundary quantile
+      12. Synthesize binary saliency gate: $M_i^{(l)} = \mathbb{I}\left[ \tilde{s}_i^{(l)} > \tau_t^{*(l)} \right]$
+   13. **end for**
+   - *// Phase C: Retention-Aware Modulation & Gated Update*
+   14. Compute retain-to-forget gradient scaling factor: $\lambda_c = \frac{\mathbb{E}_{x \sim \mathcal{D}_r^c} \left[ \|\nabla_W \mathcal{L}_r(x)\| \right]}{\mathbb{E}_{x \sim \mathcal{D}_f} \left[ \|\nabla_W \mathcal{L}_f(x)\| \right]}$
+   15. Execute gated parameter update according to regime $M$:
+      - **GA:** $w_i^{(t+1)} = w_i^{(t)} + \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}}$
+      - **FT:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial |\mathcal{L}_f - \mathcal{L}_r|}{\partial w_i^{(l)}}$
+      - **RL:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_r}{\partial w_i^{(l)}}$
+   - *// Phase D: Retain Knowledge Consolidation*
+   16. Perform mini-epoch SGD stabilization on $\mathcal{D}_r$ using retain loss $\mathcal{L}_r$
+17. **end for**
+18. **return** Unlearned model weights $W^* = W^{(T)}$
+***
 
 ---
 
 ## 📊 Comprehensive Results
-
-## Experimental Results & Benchmark Tables
 
 ### Metric Direction Guide
 | Metric | Notation | Optimal Direction | Description |
@@ -170,8 +182,6 @@ for epoch in range(epochs):
 | **Stability Variance** | **$\sigma^2$** | **Lower is better ($\downarrow$)** | RA variance across unlearning epochs (optimization stability) |
 | **Training Efficiency**| **Eff** | **Higher is better ($\uparrow$)** | Percentage of max epochs completed before early stopping |
 
----
-
 ### Table I: Comparison with Existing Paradigms
 | Method | Type | Adaptivity | Explainability |
 | :--- | :--- | :--- | :--- |
@@ -180,8 +190,6 @@ for epoch in range(epochs):
 | **SalUn** [9] | Gradient + Masking | Fixed | Moderate |
 | **AMU** [14] | Adaptive Rate | Dynamic | Low |
 | **AOS (Ours)** | **Statistical + Gradient** | **Fully Adaptive** | **High** |
-
----
 
 ### Table II: Retrain Baseline with Early Stopping (CIFAR-100, ResNet-18)
 | Forget Split | Best TA (%) (↑) | Retain Acc (RA %) (↑) | Epochs (↓) | Training Efficiency (%) (↑) |
@@ -196,10 +204,8 @@ for epoch in range(epochs):
 | **80%** | 35.78 | 66.22 | 42/45 | 93.3% |
 | **90%** | 24.35 | 47.36 | 38/43 | 84.4% |
 
----
-
 ### Table III: Comprehensive Method Comparison on CIFAR-100 (ResNet-18)
-| Forget % | FT Test (↑) | FT Forget (↓) | FT Retain (↑) | GA Test (↑) | GA Forget (↓) | GA Retain (↑) | RL (Retrain) Test (↑) | RL Forget (↓) | RL Retain (↑) |
+| Forget % | FT Test (↑) | FT Forget (↓) | FT Retain (↑) | GA Test (↑) | GA Forget (↓) | GA Retain (↑) | RL Test (↑) | RL Forget (↓) | RL Retain (↑) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **10%** | 55.29 | 57.26 | 61.57 | 62.31 | 81.88 | 83.08 | 54.06 | 55.80 | 60.21 |
 | **20%** | 55.09 | 56.92 | 63.96 | 21.26 | 25.01 | 25.43 | 53.75 | 53.92 | 61.62 |
@@ -211,22 +217,16 @@ for epoch in range(epochs):
 | **80%** | 46.43 | 48.34 | 70.33 | 1.03 | 1.03 | 0.93 | 47.62 | 48.65 | 67.18 |
 | **90%** | 43.05 | 44.59 | 67.14 | 1.00 | 0.99 | 1.10 | 39.53 | 39.56 | 60.00 |
 
----
-
 ### Table IV: Ablation Study at 50% Forget Ratio
-| Variant | Description | Forget Acc (%) (↓) | Retain Acc (%) (↑) | RA Stability Variance ($\sigma^2$) (↓) |
+| Variant | Description | Forget Acc (%) (↓) | Retain Acc (%) (↑) | Variance (σ²) (↓) |
 | :--- | :--- | :---: | :---: | :---: |
-| **SalUn Baseline** | Fixed static threshold $\tau$ | 8.3 | 77.2 | 0.024 |
+| **SalUn Baseline** | Fixed static threshold τ | 8.3 | 77.2 | 0.024 |
 | **AOS-T** | Otsu Thresholding Only | 8.0 | 80.6 | 0.018 |
 | **AOS-F** | Fisher Normalization Only | 7.9 | 81.8 | 0.016 |
 | **AOS-R** | Retention Scaling Only | 8.2 | 82.5 | 0.015 |
 | **AOS (Full)** | Complete Framework | **7.8** | **83.4** | **0.014** |
 
 > **Key Takeaway**: At 50% forgetting, AOS achieves **7.8% Forget Accuracy ($\downarrow$)** while sustaining **83.4% Retain Accuracy ($\uparrow$)** (+6.2% over SalUn and +4.3% over AMU), with a **37% reduction in variance ($\downarrow$)** and **8% runtime reduction ($\downarrow$)** via earlier convergence.
-
----
-
-
 
 ---
 
@@ -248,4 +248,7 @@ for epoch in range(epochs):
   year={2025}
 }
 ```
-Licensed under the [MIT License](LICENSE).
+
+### Dual License Notice
+* **Code Repository**: The source code within this repository is open-sourced under the [MIT License](LICENSE) for academic, research, and educational purposes.
+* **Algorithmic Methods**: The underlying Adaptive Otsu Unlearning (AOS) algorithmic framework, methodologies, and processes are **proprietary and not open source**. They may not be used for commercial purposes without explicit prior permission from the authors. 
