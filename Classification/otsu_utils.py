@@ -10,7 +10,20 @@ import logging
 # Enhanced Otsu thresholding with method-specific retention bounds
 def enhanced_otsu_threshold(gradients, method='FT', target_retention_range=(0.5, 0.8)):
     """
-    Enhanced Otsu thresholding with method-specific retention bounds and GA fixes
+    Enhanced Otsu thresholding with method-specific retention bounds and GA fixes.
+    
+    This implements the core Adaptive Otsu Unlearning (AOS) thresholding:
+    1. Computes the optimal Otsu threshold based on intra-class variance of the parameter gradients/saliencies.
+    2. Uses retention-aware scaling to ensure the empirical retention rate falls within the `target_retention_range`.
+    3. The optimal threshold k* maximizes inter-class variance \sigma_B^2(k).
+    
+    Args:
+        gradients (dict): The computed gradients or saliency scores for model parameters.
+        method (str): The unlearning method (e.g., 'GA', 'FT', 'RL').
+        target_retention_range (tuple): The allowed [min, max] bounds for retention rate \tau.
+        
+    Returns:
+        float: The optimally bounded Otsu threshold.
     """
     try:
         # Handle GA method specially - conservative approach
@@ -152,7 +165,21 @@ def generate_otsu_mask(gradients, method='FT', percent=10):
 
 def compute_gradients(model, forget_loader, retain_loader, method, device):
     """
-    Compute gradients for different unlearning methods
+    Compute gradients for different unlearning methods, optionally applying 
+    Fisher Normalization to stabilize the variance of parameter sensitivities.
+    
+    This function aligns the parameter sensitivities with the overall model's 
+    probabilistic output distribution, avoiding skewed saliency maps.
+    
+    Args:
+        model: The PyTorch model to compute gradients for.
+        forget_loader: DataLoader for the dataset to be forgotten.
+        retain_loader: DataLoader for the dataset to be retained.
+        method: String ('GA', 'FT', 'RL') specifying the unlearning core method.
+        device: 'cuda' or 'cpu'.
+        
+    Returns:
+        dict: The computed gradients (saliency scores) mapped by parameter name.
     """
     model.eval()
     gradients = {}
