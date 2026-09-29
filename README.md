@@ -53,25 +53,164 @@ $$w_i^{(t+1)} = w_i^{(t)} + \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\pa
 
 ---
 
-## Algorithm 1: AOS Unlearning Framework
+## System Architecture & Algorithmic Framework
+
+### End-to-End Pipeline Architecture
+
+```mermaid
+flowchart TD
+    %% Input Layer
+    subgraph DataInputs ["1. Data & Pretrained Model Ingestion"]
+        W0["<b>Pretrained Model (W₀)</b><br/>• ResNet-18 / CIFAR-100<br/>• CFG DDPM / CIFAR-10<br/>• Stable Diffusion / Latent UNet"]
+        Df["<b>Forget Set (D_f)</b><br/>Target classes / concepts to erase"]
+        Dr["<b>Retain Set (D_r)</b><br/>Classes & features to preserve"]
+    end
+
+    %% Saliency & Curvature Engine
+    subgraph SaliencyEngine ["2. Adaptive Otsu Saliency (AOS) Engine"]
+        GradF["<b>Forget Gradient Energy</b><br/><code>s_i = ||∇_w L_f||²</code>"]
+        FIM["<b>Retain Fisher Information (FIM)</b><br/><code>F_i ≈ E[(∇_w log p)²]</code>"]
+        Norm["<b>Curvature Normalization</b><br/><code>s̃_i = s_i / √(F_i + ε)</code>"]
+        Histo["<b>Layer-wise Saliency Histogram (B=128)</b><br/>Cumulative probabilities & means"]
+        OtsuOpt["<b>Otsu Variance Maximization</b><br/><code>τ_Otsu = argmax ω₀ω₁ (μ₀ - μ₁)²</code>"]
+        Anneal["<b>Dynamic Threshold Annealing</b><br/><code>τ*_t = α_t τ_init + (1 - α_t) τ_Otsu</code>"]
+        Bounds["<b>Retention Bound Modulation</b><br/>Enforce empirical rate ∈ [τ_min, τ_max]"]
+        MaskGen["<b>Sparse Binary Saliency Mask</b><br/><code>M_i = 𝟙[s̃_i > τ*_t]</code>"]
+    end
+
+    %% Unlearning Regimes
+    subgraph ExecutionEngine ["3. Multi-Regime Unlearning Engine"]
+        Lambda["<b>Dynamic Retention Ratio</b><br/><code>λ_c = ||∇_W L_r|| / ||∇_W L_f||</code>"]
+        RegimeChoice{"Unlearning Regime"}
+        GA["<b>Gradient Ascent (GA)</b><br/><code>W ← W + η · λ_c · M ⊙ ∇ L_f</code><br/><i>(Conservative bounds 60-90%)</i>"]
+        FT["<b>Fine-Tuning (FT)</b><br/>Difference optimization <code>|G_f - G_r|</code><br/><i>(Balanced bounds 50-80%)</i>"]
+        RL["<b>Retain Learning (RL)</b><br/>Retain loss minimization on D_r<br/><i>(Protected early layers)</i>"]
+        Consolidate["<b>Retain Knowledge Consolidation</b><br/>Periodic SGD stabilization step on D_r"]
+    end
+
+    %% Auditing & Verification
+    subgraph EvalEngine ["4. Verification & Safety Auditing Suite"]
+        Metrics["<b>Classification Metrics</b><br/>• Forget Acc (FA ↓)<br/>• Retain Acc (RA ↑)<br/>• Stability Variance (σ² ↓)"]
+        MIA["<b>Privacy Auditing</b><br/>• Membership Inference Attack (MIA)<br/>• Logit & Loss Distribution Shift"]
+        GenEval["<b>Generative Quality</b><br/>• Concept Erasure Rate (100% target)<br/>• Image Quality (FID & LPIPS)<br/>• Zero-shot CLIP Concept Classifier"]
+    end
+
+    %% Connections
+    W0 --> GradF
+    Df --> GradF
+    W0 --> FIM
+    Dr --> FIM
+    GradF --> Norm
+    FIM --> Norm
+    Norm --> Histo
+    Histo --> OtsuOpt
+    OtsuOpt --> Anneal
+    Anneal --> Bounds
+    Bounds --> MaskGen
+
+    MaskGen --> RegimeChoice
+    Df --> Lambda
+    Dr --> Lambda
+    Lambda --> RegimeChoice
+
+    RegimeChoice -->|Regime = GA| GA
+    RegimeChoice -->|Regime = FT| FT
+    RegimeChoice -->|Regime = RL| RL
+
+    GA --> Consolidate
+    FT --> Consolidate
+    RL --> Consolidate
+
+    Consolidate -->|"Next Epoch (t < T)"| SaliencyEngine
+    Consolidate -->|"Unlearned Model W*"| Metrics
+    Consolidate -->|"Unlearned Model W*"| MIA
+    Consolidate -->|"Unlearned Model W*"| GenEval
+```
+
+---
+
+### Formal Algorithmic Specification
 
 ```text
 Algorithm 1: Adaptive Otsu Saliency (AOS) Unlearning Framework
-Require: Model W, forget dataset D_f, retain dataset D_r, learning rate eta, annealing constant T_a
-1:  Initialize tau_init^(l) for all layers l
+────────────────────────────────────────────────────────────────────────────────────────────────
+Input:
+  • Pretrained model weights W₀
+  • Forget dataset D_f, Retain dataset D_r
+  • Learning rate η, Annealing constant T_a, Histogram resolution B (default: 128)
+  • Target retention bounds [τ_min, τ_max], Unlearning regime M ∈ {GA, FT, RL}
+Output:
+  • Unlearned model weights W*
+
+1:  Initialize per-layer percentile threshold τ_init^(l) for all layers l = 1, ..., L
 2:  for each unlearning epoch t = 1 to T do
-3:      Compute saliencies s_i^(l) = || \partial L_f / \partial w_i^(l) ||^2
-4:      Estimate Fisher F_i^(l) on D_r
-5:      Normalize \tilde{s}_i^(l) = s_i^(l) / \sqrt{F_i^(l) + \epsilon}
-6:      Construct histogram H^(l)(\tilde{s}), compute tau_Otsu^(l)
-7:      Compute tau_t^{*(l)} = \alpha_t \tau_{init}^{(l)} + (1 - \alpha_t) \tau_{Otsu}^{(l)}
-8:      Form mask M_i^(l) = 1[\tilde{s}_i^(l) > \tau_t^{*(l)}]
-9:      Compute \lambda_c from retain-forget gradient ratio
-10:     Update weights: w_i^{(t+1)} = w_i^{(t)} + \eta \lambda_c M_i^{(l)} (\partial L_f / \partial w_i^(l))
-11:     Fine-tune on retain set D_r for stability
-12: end for
-13: return Unlearned weights W'
+3:      // Phase A: Saliency and Curvature Estimation
+4:      Compute raw forget-set saliencies s_i^(l) = || ∂L_f / ∂w_i^(l) ||² for each weight
+5:      Estimate empirical Fisher information on retain data:
+            F_i^(l) = E_{(x,y) ~ D_r} [ (∂ log p(y|x; W) / ∂w_i^(l))² ]
+6:      Compute curvature-normalized saliency:
+            s̃_i^(l) = s_i^(l) / √(F_i^(l) + ε)
+
+7:      // Phase B: Adaptive Otsu Variance Maximization
+8:      for each layer l = 1 to L do
+9:          Construct 1D normalized saliency histogram H^(l)(s̃) with B bins
+10:         Compute optimal Otsu threshold maximizing between-class variance:
+                τ_Otsu^(l) = argmax_τ  ω₀(τ) ω₁(τ) [ μ₀(τ) - μ₁(τ) ]²
+11:         Apply dynamic annealing:
+                α_t = exp(-t / T_a)
+                τ_t*^(l) = α_t τ_init^(l) + (1 - α_t) τ_Otsu^(l)
+12:         Verify empirical retention rate r_emp = (1/|W^(l)|) ∑ 𝟙[s̃_i^(l) > τ_t*^(l)]
+13:         If r_emp ∉ [τ_min, τ_max], calibrate τ_t*^(l) to boundary quantile
+14:         Synthesize binary saliency gate:
+                M_i^(l) = 𝟙[ s̃_i^(l) > τ_t*^(l) ]
+15:     end for
+
+16:     // Phase C: Retention-Aware Modulation & Gated Update
+17:     Compute retain-to-forget gradient scaling factor:
+            λ_c = E_{x ~ D_r^c} [ ||∇_W L_r(x)|| ] / E_{x ~ D_f} [ ||∇_W L_f(x)|| ]
+18:     Execute gated parameter update according to regime M:
+            GA:  w_i^(t+1) = w_i^(t) + η · λ_c · M_i^(l) · (∂L_f / ∂w_i^(l))
+            FT:  w_i^(t+1) = w_i^(t) - η · λ_c · M_i^(l) · (∂|L_f - L_r| / ∂w_i^(l))
+            RL:  w_i^(t+1) = w_i^(t) - η · M_i^(l) · (∂L_r / ∂w_i^(l))  (with protected early layers)
+
+19:     // Phase D: Retain Knowledge Consolidation
+20:     Perform mini-epoch SGD stabilization on D_r using retain loss L_r
+21: end for
+22: return Unlearned model weights W* = W^(T)
+────────────────────────────────────────────────────────────────────────────────────────────────
 ```
+
+---
+
+### Unlearning Regimes & Method-Specific Dynamics
+
+| Regime | Optimization Objective | Retention Bounds $[\tau_{\min}, \tau_{\max}]$ | Gradient Scaling ($\lambda_c$) | Structural Protections |
+| :--- | :--- | :---: | :---: | :--- |
+| **Gradient Ascent (GA)** | $\max_W \mathcal{L}_f(W; \mathcal{D}_f)$ | **60% – 90%** (Conservative) | $0.5\times$ damped | Shallow feature extractors (`conv1`, `layer1`, `fc`) frozen to avoid catastrophic collapse. |
+| **Fine-Tuning (FT)** | $\min_W \|\nabla \mathcal{L}_f - \nabla \mathcal{L}_r\|$ | **50% – 80%** (Balanced) | $1.0\times$ adaptive ratio | Gradient difference isolates discriminative features between forget and retain classes. |
+| **Retain Learning (RL)**| $\min_W \mathcal{L}_r(W; \mathcal{D}_r)$ | **60% – 90%** (Targeted) | $1.0\times$ standard | Regularized retain loss optimization masked by Otsu-selected sensitivity channels. |
+
+---
+
+## Comparison with SalUn (Baseline)
+
+AOS is built as a direct extension and enhancement of **SalUn** (ICLR 2024 Spotlight by Fan et al., [arXiv:2310.12508](https://arxiv.org/abs/2310.12508)), which serves as our primary baseline. While SalUn demonstrated that unlearning can be achieved by masking weight updates according to a static saliency threshold, its rigid hyperparameter requirements lead to instability across varying unlearning scopes. AOS addresses these structural limitations through statistical adaptivity and curvature awareness.
+
+### Methodological Comparison
+
+| Feature / Mechanism | Original SalUn | AOS (Ours) | Improvement / Benefit |
+| :--- | :--- | :--- | :--- |
+| **Saliency Thresholding** | Static, manually tuned global $\tau$ | Adaptive, layer-wise Otsu thresholding | Automatically adapts to layer capacity and forget ratio without grid search. |
+| **Curvature Awareness** | None (raw gradient magnitude) | Fisher-weighted normalization | Prevents catastrophic forgetting by dampening updates in high-curvature directions. |
+| **Update Scaling** | Fixed arbitrary step size | Retention-aware dynamic scaling ($\lambda_c$) | Balances update magnitude against feature retention, preserving shared representations. |
+| **Training Dynamics** | Fixed threshold throughout training | Dynamic threshold annealing | Stabilizes early optimization phases before saliency distributions separate bimodally. |
+
+### Quantitative Improvements
+
+At a **50% forget ratio** on CIFAR-100 (ResNet-18), AOS provides significant performance improvements over the baseline:
+- **Retain Accuracy (RA):** Achieves **83.4%** vs SalUn's **77.2%** (**+6.2%**).
+- **Optimization Stability:** Reduces stability variance ($\sigma^2$) to **0.014** vs SalUn's **0.024** (**-37%**).
+- **Forget Accuracy (FA):** Further drops to **7.8%** vs SalUn's **8.3%** (lower is better).
 
 ---
 
@@ -220,17 +359,17 @@ python main_train.py --arch resnet18 --dataset cifar100 --epochs 100 --lr 0.1 --
 
 #### Step 2: Run AOS Unlearning
 ```bash
-# Run AOS unlearning across 10% forget ratio
-python run_otsu_experiments.py --method FT --forget_ratio 0.1
+# Run comprehensive AOS unlearning experiments (automatically loops over methods and forget ratios)
+python main_unlearning.py --arch resnet18 --dataset cifar100 --model_path ./weights/resnet18_cifar100.pth
 
-# Run with specific unlearning objective (GA, FT, or RL)
-python main_unlearning.py --arch resnet18 --dataset cifar100 --method FT --forget_ratio 0.5 --anneal_epochs 5
+# Or test Otsu methods specifically
+python run_otsu_experiments.py --test_methods
 ```
 
 #### Step 3: Evaluate Unlearned Model (Accuracy & MIA)
 ```bash
-python evaluate_model.py --model_path ./weights/unlearned_model.pt --dataset cifar100
-python mia_evaluation.py --model_path ./weights/unlearned_model.pt --dataset cifar100
+python evaluate_model.py --model_path ./results/unlearned_model.pt --forget_perc 0.1
+python evaluate_all_mia.py --dataset cifar100 --arch resnet18
 ```
 
 ---
