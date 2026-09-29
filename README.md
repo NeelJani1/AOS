@@ -66,28 +66,31 @@ python evaluate_model.py --model_path ./results/unlearned_model.pt --forget_perc
 python evaluate_all_mia.py --dataset cifar100 --arch resnet18
 ```
 
-<details>
-<summary><b>Generative Diffusion Unlearning (DDPM)</b></summary>
+### Generative Diffusion Unlearning (DDPM)
 
 ```bash
 cd DDPM
+# 1. Train baseline model
 python train.py --config configs/cifar10_train.yml
+# 2. Run AOS unlearning
 python train.py --config configs/cifar10_saliency_unlearn.yml
+# 3. Generate samples
 python quick_eval.py --config configs/cifar10_sample.yml
+# 4. Evaluate classifier
 python classifier_evaluation.py
 ```
-</details>
 
-<details>
-<summary><b>Stable Diffusion Concept Erasure</b></summary>
+### Stable Diffusion Concept Erasure
 
 ```bash
 cd SD
+# 1. Run Concept Erasure (Nudity)
 python train-scripts/train-esd.py --prompt "nudity" --train_method "noxattn" --devices "0,0"
+# 2. Generate test images
 python eval-scripts/generate-images.py --prompts prompts/test_prompts.csv
+# 3. Compute FID score
 python eval-scripts/compute-fid.py
 ```
-</details>
 
 ---
 
@@ -141,31 +144,31 @@ flowchart TD
 **Output:**
 - Unlearned model weights $W^*$
 ***
-1. Initialize per-layer percentile threshold $\tau_{\text{init}}^{(l)}$ for all layers $l = 1, \dots, L$
-2. **for** each unlearning epoch $t = 1$ to $T$ **do**
-   - *// Phase A: Saliency and Curvature Estimation*
-   3. Compute raw forget-set saliencies $s_i^{(l)} = \left\| \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}} \right\|^2$ for each weight
-   4. Estimate empirical Fisher information on retain data: $F_i^{(l)} = \mathbb{E}_{(x,y) \sim \mathcal{D}_r} \left[ \left(\frac{\partial \log p(y|x; W)}{\partial w_i^{(l)}}\right)^2 \right]$
-   5. Compute curvature-normalized saliency: $\tilde{s}_i^{(l)} = \frac{s_i^{(l)}}{\sqrt{F_i^{(l)} + \epsilon}}$
-   - *// Phase B: Adaptive Otsu Variance Maximization*
-   6. **for** each layer $l = 1$ to $L$ **do**
-      7. Construct 1D normalized saliency histogram $\mathcal{H}^{(l)}(\tilde{s})$ with $B$ bins
-      8. Compute optimal Otsu threshold maximizing between-class variance: $\tau_{\text{Otsu}}^{(l)} = \arg\max_{\tau} \omega_0(\tau) \omega_1(\tau) \left[ \mu_0(\tau) - \mu_1(\tau) \right]^2$
-      9. Apply dynamic annealing: $\tau_t^{*(l)} = \alpha_t \tau_{\text{init}}^{(l)} + (1 - \alpha_t) \tau_{\text{Otsu}}^{(l)}$ where $\alpha_t = \exp\left(-\frac{t}{T_a}\right)$
-      10. Verify empirical retention rate $r_{\text{emp}} = \frac{1}{|W^{(l)}|} \sum \mathbb{I}\left[\tilde{s}_i^{(l)} > \tau_t^{*(l)}\right]$
-      11. **if** $r_{\text{emp}} \notin [\tau_{\min}, \tau_{\max}]$ **then** calibrate $\tau_t^{*(l)}$ to boundary quantile
-      12. Synthesize binary saliency gate: $M_i^{(l)} = \mathbb{I}\left[ \tilde{s}_i^{(l)} > \tau_t^{*(l)} \right]$
-   13. **end for**
-   - *// Phase C: Retention-Aware Modulation & Gated Update*
-   14. Compute retain-to-forget gradient scaling factor: $\lambda_c = \frac{\mathbb{E}_{x \sim \mathcal{D}_r^c} \left[ \|\nabla_W \mathcal{L}_r(x)\| \right]}{\mathbb{E}_{x \sim \mathcal{D}_f} \left[ \|\nabla_W \mathcal{L}_f(x)\| \right]}$
-   15. Execute gated parameter update according to regime $M$:
-      - **GA:** $w_i^{(t+1)} = w_i^{(t)} + \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}}$
-      - **FT:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial |\mathcal{L}_f - \mathcal{L}_r|}{\partial w_i^{(l)}}$
-      - **RL:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_r}{\partial w_i^{(l)}}$
-   - *// Phase D: Retain Knowledge Consolidation*
-   16. Perform mini-epoch SGD stabilization on $\mathcal{D}_r$ using retain loss $\mathcal{L}_r$
-17. **end for**
-18. **return** Unlearned model weights $W^* = W^{(T)}$
+> **1.** Initialize per-layer percentile threshold $\tau_{\text{init}}^{(l)}$ for all layers $l = 1, \dots, L$  
+> **2.** **for** each unlearning epoch $t = 1$ to $T$ **do**  
+> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase A: Saliency and Curvature Estimation*  
+> &nbsp;&nbsp;&nbsp;&nbsp;**3.** Compute raw forget-set saliencies $s_i^{(l)} = \left\| \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}} \right\|^2$ for each weight  
+> &nbsp;&nbsp;&nbsp;&nbsp;**4.** Estimate empirical Fisher information on retain data: $F_i^{(l)} = \mathbb{E}_{(x,y) \sim \mathcal{D}_r} \left[ \left(\frac{\partial \log p(y|x; W)}{\partial w_i^{(l)}}\right)^2 \right]$  
+> &nbsp;&nbsp;&nbsp;&nbsp;**5.** Compute curvature-normalized saliency: $\tilde{s}_i^{(l)} = \frac{s_i^{(l)}}{\sqrt{F_i^{(l)} + \epsilon}}$  
+> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase B: Adaptive Otsu Variance Maximization*  
+> &nbsp;&nbsp;&nbsp;&nbsp;**6.** **for** each layer $l = 1$ to $L$ **do**  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**7.** Construct 1D normalized saliency histogram $\mathcal{H}^{(l)}(\tilde{s})$ with $B$ bins  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**8.** Compute optimal Otsu threshold maximizing between-class variance: $\tau_{\text{Otsu}}^{(l)} = \arg\max_{\tau} \omega_0(\tau) \omega_1(\tau) \left[ \mu_0(\tau) - \mu_1(\tau) \right]^2$  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**9.** Apply dynamic annealing: $\tau_t^{*(l)} = \alpha_t \tau_{\text{init}}^{(l)} + (1 - \alpha_t) \tau_{\text{Otsu}}^{(l)}$ where $\alpha_t = \exp\left(-\frac{t}{T_a}\right)$  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**10.** Verify empirical retention rate $r_{\text{emp}} = \frac{1}{|W^{(l)}|} \sum \mathbb{I}\left[\tilde{s}_i^{(l)} > \tau_t^{*(l)}\right]$  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**11.** **if** $r_{\text{emp}} \notin [\tau_{\min}, \tau_{\max}]$ **then** calibrate $\tau_t^{*(l)}$ to boundary quantile  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**12.** Synthesize binary saliency gate: $M_i^{(l)} = \mathbb{I}\left[ \tilde{s}_i^{(l)} > \tau_t^{*(l)} \right]$  
+> &nbsp;&nbsp;&nbsp;&nbsp;**13.** **end for**  
+> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase C: Retention-Aware Modulation & Gated Update*  
+> &nbsp;&nbsp;&nbsp;&nbsp;**14.** Compute retain-to-forget gradient scaling factor: $\lambda_c = \frac{\mathbb{E}_{x \sim \mathcal{D}_r^c} \left[ \|\nabla_W \mathcal{L}_r(x)\| \right]}{\mathbb{E}_{x \sim \mathcal{D}_f} \left[ \|\nabla_W \mathcal{L}_f(x)\| \right]}$  
+> &nbsp;&nbsp;&nbsp;&nbsp;**15.** Execute gated parameter update according to regime $M$:  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**GA:** $w_i^{(t+1)} = w_i^{(t)} + \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}}$  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**FT:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial |\mathcal{L}_f - \mathcal{L}_r|}{\partial w_i^{(l)}}$  
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**RL:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_r}{\partial w_i^{(l)}}$  
+> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase D: Retain Knowledge Consolidation*  
+> &nbsp;&nbsp;&nbsp;&nbsp;**16.** Perform mini-epoch SGD stabilization on $\mathcal{D}_r$ using retain loss $\mathcal{L}_r$  
+> **17.** **end for**  
+> **18.** **return** Unlearned model weights $W^* = W^{(T)}$
 ***
 
 ---
@@ -231,14 +234,33 @@ flowchart TD
 ---
 
 ## 📁 Repository Structure
-- `Classification/`: Image classification unlearning (ResNet-18, VGG)
-- `DDPM/`: Generative unlearning (Classifier-Free Guidance DDPM)
-- `SD/`: Stable Diffusion concept erasure
-- `images/`: Architectural schematics and plots
+
+```text
+AOS/
+├── Classification/      # Image classification unlearning (ResNet-18)
+│   ├── data/            # Datasets and labels for classification
+│   ├── models/          # Model architectures and utilities
+│   └── results/         # Output logs, metrics, and models
+├── DDPM/                # Generative unlearning (DDPM)
+│   ├── configs/         # YAML config files for training/sampling
+│   ├── models/          # DDPM model definitions and layers
+│   └── runners/         # Diffusion process scripts
+├── SD/                  # Stable Diffusion concept erasure
+│   ├── train-scripts/   # Scripts for erasing concepts
+│   └── eval-scripts/    # Evaluation scripts (FID, generate images)
+├── images/              # Architectural schematics and plots
+├── environment.yml      # Conda environment definition
+├── requirements.txt     # Pip dependencies
+└── README.md            # This document
+```
 
 ---
 
 ## 📜 Citation & License
+
+If you find our work useful, please consider citing it:
+
+> Neel Jani and Gurudas Salunke (2025). *Adaptive Otsu Unlearning: A Variance-Aware Framework for Stable and Interpretable Machine Unlearning*. Department of Computer Science, University of Auckland.
 
 ```bibtex
 @article{jani2025adaptive,
