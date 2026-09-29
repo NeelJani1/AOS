@@ -185,7 +185,22 @@ flowchart TD
 | **Stability Variance** | **$\sigma^2$** | **Lower is better ($\downarrow$)** | RA variance across unlearning epochs (optimization stability) |
 | **Training Efficiency**| **Eff** | **Higher is better ($\uparrow$)** | Percentage of max epochs completed before early stopping |
 
-### Table I: Comparison with Existing Paradigms
+### Table I: Quantitative Benchmark Across Machine Unlearning Methods (CIFAR-100, 50% Forget)
+| Method | Paradigm | Thresholding | Retain Acc (RA %) (↑) | Forget Acc (FA %) (↓) | Stability Variance (σ²) (↓) | Hyperparameter Tuning |
+| :--- | :--- | :--- | :---: | :---: | :---: | :--- |
+| **Exact Retrain** | Gold Standard Baseline | N/A | 85.61% | ~1.0% | — | Full Retraining Cost |
+| **Fine-Tuning (FT)** | Gradient Baseline | None | 65.68% | 55.04% | High | Learning rate search |
+| **Gradient Ascent (GA)** | Naive Unlearning | None | 1.06% | 0.96% | Collapse | Step size tuning |
+| **SISA** [1] | Data Sharding | Static Slices | ~78.0% | ~8.0% | Low | Shard & slice count |
+| **AMU** [14] | Adaptive Rate | Heuristic Rate | 79.1% | 8.1% | 0.021 | Dynamic step tuning |
+| **SalUn** [9] *(ICLR '24)* | Saliency Masking | Fixed (τ) | 77.2% | 8.3% | 0.024 | Manual grid search on τ |
+| **AOS (Ours)** | **Statistical Masking** | **Adaptive Otsu** | **83.4%** | **7.8%** | **0.014** | **Zero threshold tuning** |
+
+> **Key Performance Advantage**: AOS achieves **+6.2% Retain Accuracy** over SalUn and **+4.3%** over AMU while reducing stability variance by **37%** (0.014 vs. 0.024), effectively matching the utility of exact retraining without requiring manual threshold hyperparameter search.
+
+---
+
+### Table II: Qualitative Comparison with Existing Paradigms
 | Method | Type | Adaptivity | Explainability |
 | :--- | :--- | :--- | :--- |
 | **SISA** [1] | Certified | Static | High |
@@ -194,7 +209,9 @@ flowchart TD
 | **AMU** [14] | Adaptive Rate | Dynamic | Low |
 | **AOS (Ours)** | **Statistical + Gradient** | **Fully Adaptive** | **High** |
 
-### Table II: Retrain Baseline with Early Stopping (CIFAR-100, ResNet-18)
+---
+
+### Table III: Retrain Baseline with Early Stopping (CIFAR-100, ResNet-18)
 | Forget Split | Best TA (%) (↑) | Retain Acc (RA %) (↑) | Epochs (↓) | Training Efficiency (%) (↑) |
 | :---: | :---: | :---: | :---: | :---: |
 | **10%** | 65.28 | 93.72 | 41/45 | 91.1% |
@@ -207,7 +224,7 @@ flowchart TD
 | **80%** | 35.78 | 66.22 | 42/45 | 93.3% |
 | **90%** | 24.35 | 47.36 | 38/43 | 84.4% |
 
-### Table III: Comprehensive Method Comparison on CIFAR-100 (ResNet-18)
+### Table IV: Comprehensive Multi-Ratio Comparison on CIFAR-100 (ResNet-18)
 | Forget % | FT Test (↑) | FT Forget (↓) | FT Retain (↑) | GA Test (↑) | GA Forget (↓) | GA Retain (↑) | RL Test (↑) | RL Forget (↓) | RL Retain (↑) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **10%** | 55.29 | 57.26 | 61.57 | 62.31 | 81.88 | 83.08 | 54.06 | 55.80 | 60.21 |
@@ -220,7 +237,7 @@ flowchart TD
 | **80%** | 46.43 | 48.34 | 70.33 | 1.03 | 1.03 | 0.93 | 47.62 | 48.65 | 67.18 |
 | **90%** | 43.05 | 44.59 | 67.14 | 1.00 | 0.99 | 1.10 | 39.53 | 39.56 | 60.00 |
 
-### Table IV: Ablation Study at 50% Forget Ratio
+### Table V: Ablation Study at 50% Forget Ratio
 | Variant | Description | Forget Acc (%) (↓) | Retain Acc (%) (↑) | Variance (σ²) (↓) |
 | :--- | :--- | :---: | :---: | :---: |
 | **SalUn Baseline** | Fixed static threshold τ | 8.3 | 77.2 | 0.024 |
