@@ -133,17 +133,20 @@ flowchart TD
 
 ### Formal Algorithmic Specification
 
-**Algorithm 1:** Adaptive Otsu Saliency (AOS) Unlearning Framework
-***
-**Input:**
-- Pretrained model weights $W_0$
-- Forget dataset $\mathcal{D}_f$, Retain dataset $\mathcal{D}_r$
-- Learning rate $\eta$, Annealing constant $T_a$, Histogram resolution $B$ (default: 128)
-- Target retention bounds $[\tau_{\min}, \tau_{\max}]$, Unlearning regime $M \in \{\text{GA, FT, RL}\}$
-
-**Output:**
-- Unlearned model weights $W^*$
-***
+> [!NOTE]
+> ### **Algorithm 1:** Adaptive Otsu Saliency (AOS) Unlearning Framework
+> 
+> **Input:**
+> - Pretrained model weights $W_0$
+> - Forget dataset $\mathcal{D}_f$, Retain dataset $\mathcal{D}_r$
+> - Learning rate $\eta$, Annealing constant $T_a$, Histogram resolution $B$ (default: 128)
+> - Target retention bounds $[\tau_{\min}, \tau_{\max}]$, Unlearning regime $M \in \{\text{GA, FT, RL}\}$
+> 
+> **Output:**
+> - Unlearned model weights $W^*$
+> 
+> ---
+> 
 > **1.** Initialize per-layer percentile threshold $\tau_{\text{init}}^{(l)}$ for all layers $l = 1, \dots, L$  
 > **2.** **for** each unlearning epoch $t = 1$ to $T$ **do**  
 > &nbsp;&nbsp;&nbsp;&nbsp;*// Phase A: Saliency and Curvature Estimation*  
