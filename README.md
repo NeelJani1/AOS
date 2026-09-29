@@ -136,43 +136,40 @@ flowchart TD
 > [!NOTE]
 > ### **Algorithm 1:** Adaptive Otsu Saliency (AOS) Unlearning Framework
 > 
-> **Input:**
-> - Pretrained model weights $W_0$
-> - Forget dataset $\mathcal{D}_f$, Retain dataset $\mathcal{D}_r$
-> - Learning rate $\eta$, Annealing constant $T_a$, Histogram resolution $B$ (default: 128)
-> - Target retention bounds $[\tau_{\min}, \tau_{\max}]$, Unlearning regime $M \in \{\text{GA, FT, RL}\}$
-> 
-> **Output:**
-> - Unlearned model weights $W^*$
+> **Inputs**: Model weights $W_0$, Forget set $\mathcal{D}_f$, Retain set $\mathcal{D}_r$, Learning rate $\eta$, Annealing constant $T_a$, Regime $M \in \{\text{GA, FT, RL}\}$  
+> **Output**: Unlearned model weights $W^*$
 > 
 > ---
 > 
-> **1.** Initialize per-layer percentile threshold $\tau_{\text{init}}^{(l)}$ for all layers $l = 1, \dots, L$  
-> **2.** **for** each unlearning epoch $t = 1$ to $T$ **do**  
-> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase A: Saliency and Curvature Estimation*  
-> &nbsp;&nbsp;&nbsp;&nbsp;**3.** Compute raw forget-set saliencies $s_i^{(l)} = \left\| \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}} \right\|^2$ for each weight  
-> &nbsp;&nbsp;&nbsp;&nbsp;**4.** Estimate empirical Fisher information on retain data: $F_i^{(l)} = \mathbb{E}_{(x,y) \sim \mathcal{D}_r} \left[ \left(\frac{\partial \log p(y|x; W)}{\partial w_i^{(l)}}\right)^2 \right]$  
-> &nbsp;&nbsp;&nbsp;&nbsp;**5.** Compute curvature-normalized saliency: $\tilde{s}_i^{(l)} = \frac{s_i^{(l)}}{\sqrt{F_i^{(l)} + \epsilon}}$  
-> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase B: Adaptive Otsu Variance Maximization*  
-> &nbsp;&nbsp;&nbsp;&nbsp;**6.** **for** each layer $l = 1$ to $L$ **do**  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**7.** Construct 1D normalized saliency histogram $\mathcal{H}^{(l)}(\tilde{s})$ with $B$ bins  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**8.** Compute optimal Otsu threshold maximizing between-class variance: $\tau_{\text{Otsu}}^{(l)} = \arg\max_{\tau} \omega_0(\tau) \omega_1(\tau) \left[ \mu_0(\tau) - \mu_1(\tau) \right]^2$  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**9.** Apply dynamic annealing: $\tau_t^{*(l)} = \alpha_t \tau_{\text{init}}^{(l)} + (1 - \alpha_t) \tau_{\text{Otsu}}^{(l)}$ where $\alpha_t = \exp\left(-\frac{t}{T_a}\right)$  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**10.** Verify empirical retention rate $r_{\text{emp}} = \frac{1}{|W^{(l)}|} \sum \mathbb{I}\left[\tilde{s}_i^{(l)} > \tau_t^{*(l)}\right]$  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**11.** **if** $r_{\text{emp}} \notin [\tau_{\min}, \tau_{\max}]$ **then** calibrate $\tau_t^{*(l)}$ to boundary quantile  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**12.** Synthesize binary saliency gate: $M_i^{(l)} = \mathbb{I}\left[ \tilde{s}_i^{(l)} > \tau_t^{*(l)} \right]$  
-> &nbsp;&nbsp;&nbsp;&nbsp;**13.** **end for**  
-> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase C: Retention-Aware Modulation & Gated Update*  
-> &nbsp;&nbsp;&nbsp;&nbsp;**14.** Compute retain-to-forget gradient scaling factor: $\lambda_c = \frac{\mathbb{E}_{x \sim \mathcal{D}_r^c} \left[ \|\nabla_W \mathcal{L}_r(x)\| \right]}{\mathbb{E}_{x \sim \mathcal{D}_f} \left[ \|\nabla_W \mathcal{L}_f(x)\| \right]}$  
-> &nbsp;&nbsp;&nbsp;&nbsp;**15.** Execute gated parameter update according to regime $M$:  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**GA:** $w_i^{(t+1)} = w_i^{(t)} + \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}}$  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**FT:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial |\mathcal{L}_f - \mathcal{L}_r|}{\partial w_i^{(l)}}$  
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**RL:** $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_r}{\partial w_i^{(l)}}$  
-> &nbsp;&nbsp;&nbsp;&nbsp;*// Phase D: Retain Knowledge Consolidation*  
-> &nbsp;&nbsp;&nbsp;&nbsp;**16.** Perform mini-epoch SGD stabilization on $\mathcal{D}_r$ using retain loss $\mathcal{L}_r$  
-> **17.** **end for**  
-> **18.** **return** Unlearned model weights $W^* = W^{(T)}$
-***
+> #### **Initialization**
+> - Compute per-layer initial percentile threshold $\tau_{\text{init}}^{(l)}$ for all layers $l \in \{1, \dots, L\}$.
+> 
+> #### **Iterative Unlearning Loop** *(for each epoch $t = 1 \dots T$)*:
+> 
+> - **Phase A: Saliency & Curvature Estimation**
+>   - **Raw Forget Gradient Energy**: $s_i^{(l)} = \left\| \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}} \right\|^2$
+>   - **Empirical Fisher Information**: $F_i^{(l)} = \mathbb{E}_{(x,y) \sim \mathcal{D}_r} \left[ \left(\frac{\partial \log p(y|x; W)}{\partial w_i^{(l)}}\right)^2 \right]$
+>   - **Curvature Normalization**: $\tilde{s}_i^{(l)} = \frac{s_i^{(l)}}{\sqrt{F_i^{(l)} + \epsilon}}$
+> 
+> - **Phase B: Adaptive Otsu Variance Maximization** *(per layer $l$)*
+>   - Construct normalized 1D saliency histogram $\mathcal{H}^{(l)}(\tilde{s})$ with $B=128$ bins.
+>   - Compute optimal Otsu threshold maximizing between-class variance:
+>     $$\tau_{\text{Otsu}}^{(l)} = \arg\max_{\tau} \; \omega_0(\tau) \omega_1(\tau) \left[\mu_0(\tau) - \mu_1(\tau)\right]^2$$
+>   - Dynamic annealing: $\tau_t^{(l)} = \alpha_t \tau_{\text{init}}^{(l)} + (1 - \alpha_t) \tau_{\text{Otsu}}^{(l)}$, where $\alpha_t = \exp(-t / T_a)$.
+>   - Enforce retention bounds $[\tau_{\min}, \tau_{\max}]$ and synthesize binary saliency gate: $M_i^{(l)} = \mathbb{I}\left[\tilde{s}_i^{(l)} > \tau_t^{(l)}\right]$.
+> 
+> - **Phase C: Retention-Aware Modulation & Gated Update**
+>   - Dynamic retention scaling: $\lambda_c = \frac{\mathbb{E}_{x \sim \mathcal{D}_r^c}[\|\nabla_W \mathcal{L}_r(x)\|]}{\mathbb{E}_{x \sim \mathcal{D}_f}[\|\nabla_W \mathcal{L}_f(x)\|]}$
+>   - Execute gated parameter update according to unlearning regime $M$:
+>     - **GA**: $w_i^{(t+1)} = w_i^{(t)} + \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_f}{\partial w_i^{(l)}}$
+>     - **FT**: $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot \lambda_c \cdot M_i^{(l)} \cdot \frac{\partial |\mathcal{L}_f - \mathcal{L}_r|}{\partial w_i^{(l)}}$
+>     - **RL**: $w_i^{(t+1)} = w_i^{(t)} - \eta \cdot M_i^{(l)} \cdot \frac{\partial \mathcal{L}_r}{\partial w_i^{(l)}}$
+> 
+> - **Phase D: Retain Knowledge Consolidation**
+>   - Mini-epoch SGD stabilization on $\mathcal{D}_r$ using retain loss $\mathcal{L}_r$.
+> 
+> ---
+> **Return**: Unlearned model weights $W^* = W^{(T)}$
 
 ---
 
