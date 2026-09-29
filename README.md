@@ -108,6 +108,11 @@ AOS incorporates **8-bit quantized optimizers (`bitsandbytes`)**, **mixed-precis
 | **Mixed Precision Baseline** | FP16 / BF16 | Standard AdamW | ❌ Disabled | **16.4 GB** | RTX 4080 (16GB), V100 (16GB) |
 | **AOS Optimized (Ours)** | **bfloat16 / FP8** | **8-Bit AdamW (`bnb`)** | **✅ Enabled** | **7.8 GB** | **Consumer GPUs (RTX 3070 / 4060 / 4070 8GB)** |
 
+### Technical Breakdown & Memory Anatomy
+- **Model Weights & Activations (`bfloat16`)**: The latent diffusion UNet is cast using `model.bfloat16()` to prevent numerical overflow/underflow while halving parameter storage compared to standard FP32, with forward/backward passes accelerated via PyTorch Automatic Mixed Precision (`torch.amp.autocast`).
+- **8-Bit Optimizer Quantization (`bitsandbytes`)**: Standard AdamW stores two 32-bit floating-point states (first and second momentum) per parameter (8 bytes/parameter). Using `bitsandbytes.optim.AdamW8bit` quantizes these optimizer states down to 1 byte per parameter—delivering an immediate **75% memory reduction** in optimizer state overhead.
+- **Activation & Caching Controls**: Activation gradient checkpointing (`model.diffusion_model.use_checkpoint = True`) and memory fragmentation management (`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512`) suppress memory spikes during backward passes.
+
 ### Core Implementation Files
 - **[`SD/train-scripts/generate_mask.py`](SD/train-scripts/generate_mask.py)**: Memory-optimized saliency mask generation using `bitsandbytes.optim.AdamW8bit`, automatic mixed precision (`torch.amp.autocast`), and gradient checkpointing (`model.diffusion_model.use_checkpoint = True`).
 - **[`SD/train-scripts/random_label.py`](SD/train-scripts/random_label.py)**: Concept unlearning loop utilizing 8-bit optimizer states, dynamic garbage collection, and CUDA memory fragmentation tuning (`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512`).
