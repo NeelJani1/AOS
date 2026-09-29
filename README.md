@@ -5,9 +5,9 @@
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
 [![Institution](https://img.shields.io/badge/Institution-University%20of%20Auckland-003366.svg)](https://www.auckland.ac.nz/)
 
-> **Authors**: [Gurudas Salunke](mailto:gsal919@aucklanduni.ac.nz) and [Neel Jani](mailto:njan320@aucklanduni.ac.nz)  
+> **Authors**: [Neel Jani](mailto:njan320@aucklanduni.ac.nz) and [Gurudas Salunke](mailto:gsal919@aucklanduni.ac.nz)  
 > **Affiliation**: Department of Computer Science, University of Auckland, New Zealand  
-> **Paper**: *Adaptive Otsu Unlearning: A Variance-Aware Framework for Stable and Interpretable Machine Unlearning*
+> **Paper**: *Adaptive Otsu Unlearning: A Variance-Aware Framework for Stable and Interpretable Machine Unlearning (2025)*
 
 ---
 
@@ -20,7 +20,7 @@ This repository hosts the official implementation of **Adaptive Otsu Saliency (A
 2. **Fisher-Weighted Gradient Normalization**: Stabilizes updates along high-curvature parameter directions using the Fisher Information Matrix (FIM).
 3. **Retention-Aware Dynamic Scaling & Threshold Annealing**: Balances knowledge retention and forgetting dynamically, preventing catastrophic forgetting and concept revival.
 
-Evaluated on CIFAR-100 (ResNet-18) and generative diffusion tasks (DDPM & Stable Diffusion), AOS achieves superior or comparable unlearning accuracy (UA) with up to **10–15% higher retain accuracy (RA)**, **37% lower stability variance**, and **8% lower runtime** compared to fixed-threshold baselines.
+Evaluated on CIFAR-100 (ResNet-18) and generative diffusion tasks (DDPM & Stable Diffusion), AOS achieves superior or comparable unlearning accuracy (UA) with up to **10–15% higher retain accuracy (RA ↑)**, **37% lower stability variance (↓)**, and **8% lower runtime (↓)** compared to fixed-threshold baselines.
 
 ---
 
@@ -77,6 +77,18 @@ Require: Model W, forget dataset D_f, retain dataset D_r, learning rate eta, ann
 
 ## Experimental Results & Benchmark Tables
 
+### Metric Direction Guide
+| Metric | Notation | Optimal Direction | Description |
+| :--- | :---: | :---: | :--- |
+| **Test Accuracy** | **TA** | **Higher is better ($\uparrow$)** | Overall generalization on the combined test dataset |
+| **Retain Accuracy** | **RA** | **Higher is better ($\uparrow$)** | Accuracy on retained/non-forgotten classes (utility preservation) |
+| **Forget Accuracy** | **FA** | **Lower is better ($\downarrow$)** | Accuracy on forgotten classes (successful concept/data erasure) |
+| **Forgetting Ratio** | **FR** | **Higher is better ($\uparrow$)** | Ratio of erased knowledge: $(FA_{\text{before}} - FA_{\text{after}}) / FA_{\text{before}}$ |
+| **Stability Variance** | **$\sigma^2$** | **Lower is better ($\downarrow$)** | RA variance across unlearning epochs (optimization stability) |
+| **Training Efficiency**| **Eff** | **Higher is better ($\uparrow$)** | Percentage of max epochs completed before early stopping |
+
+---
+
 ### Table I: Comparison with Existing Paradigms
 | Method | Type | Adaptivity | Explainability |
 | :--- | :--- | :--- | :--- |
@@ -89,7 +101,7 @@ Require: Model W, forget dataset D_f, retain dataset D_r, learning rate eta, ann
 ---
 
 ### Table II: Retrain Baseline with Early Stopping (CIFAR-100, ResNet-18)
-| Forget Split | Best TA (%) | Retain Acc (RA %) | Epochs | Training Efficiency (%) |
+| Forget Split | Best TA (%) (↑) | Retain Acc (RA %) (↑) | Epochs (↓) | Training Efficiency (%) (↑) |
 | :---: | :---: | :---: | :---: | :---: |
 | **10%** | 65.28 | 93.72 | 41/45 | 91.1% |
 | **20%** | 63.61 | 87.89 | 42/45 | 93.3% |
@@ -104,7 +116,7 @@ Require: Model W, forget dataset D_f, retain dataset D_r, learning rate eta, ann
 ---
 
 ### Table III: Comprehensive Method Comparison on CIFAR-100 (ResNet-18)
-| Forget % | FT Test | FT Forget | FT Retain | GA Test | GA Forget | GA Retain | RL (Retrain) Test | RL Forget | RL Retain |
+| Forget % | FT Test (↑) | FT Forget (↓) | FT Retain (↑) | GA Test (↑) | GA Forget (↓) | GA Retain (↑) | RL (Retrain) Test (↑) | RL Forget (↓) | RL Retain (↑) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **10%** | 55.29 | 57.26 | 61.57 | 62.31 | 81.88 | 83.08 | 54.06 | 55.80 | 60.21 |
 | **20%** | 55.09 | 56.92 | 63.96 | 21.26 | 25.01 | 25.43 | 53.75 | 53.92 | 61.62 |
@@ -119,7 +131,7 @@ Require: Model W, forget dataset D_f, retain dataset D_r, learning rate eta, ann
 ---
 
 ### Table IV: Ablation Study at 50% Forget Ratio
-| Variant | Description | Forget Acc (%) | Retain Acc (%) | RA Stability Variance ($\sigma^2$) |
+| Variant | Description | Forget Acc (%) (↓) | Retain Acc (%) (↑) | RA Stability Variance ($\sigma^2$) (↓) |
 | :--- | :--- | :---: | :---: | :---: |
 | **SalUn Baseline** | Fixed static threshold $\tau$ | 8.3 | 77.2 | 0.024 |
 | **AOS-T** | Otsu Thresholding Only | 8.0 | 80.6 | 0.018 |
@@ -127,7 +139,7 @@ Require: Model W, forget dataset D_f, retain dataset D_r, learning rate eta, ann
 | **AOS-R** | Retention Scaling Only | 8.2 | 82.5 | 0.015 |
 | **AOS (Full)** | Complete Framework | **7.8** | **83.4** | **0.014** |
 
-> **Key Takeaway**: At 50% forgetting, AOS achieves **7.8% Forget Accuracy** while sustaining **83.4% Retain Accuracy** (+6.2% over SalUn and +4.3% over AMU), with a **37% reduction in variance** and **8% runtime reduction** via earlier convergence.
+> **Key Takeaway**: At 50% forgetting, AOS achieves **7.8% Forget Accuracy ($\downarrow$)** while sustaining **83.4% Retain Accuracy ($\uparrow$)** (+6.2% over SalUn and +4.3% over AMU), with a **37% reduction in variance ($\downarrow$)** and **8% runtime reduction ($\downarrow$)** via earlier convergence.
 
 ---
 
@@ -261,11 +273,11 @@ python eval-scripts/compute-fid.py
 If you find this work or codebase helpful in your research, please cite our paper:
 
 ```bibtex
-@article{salunke2024adaptive,
+@article{jani2025adaptive,
   title={Adaptive Otsu Unlearning: A Variance-Aware Framework for Stable and Interpretable Machine Unlearning},
-  author={Salunke, Gurudas and Jani, Neel},
+  author={Jani, Neel and Salunke, Gurudas},
   journal={Department of Computer Science, University of Auckland},
-  year={2024}
+  year={2025}
 }
 ```
 
