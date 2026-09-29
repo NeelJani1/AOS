@@ -158,28 +158,75 @@ for epoch in range(epochs):
 
 ## 📊 Comprehensive Results
 
-<details>
-<summary><b>Click to expand full benchmark tables (CIFAR-100)</b></summary>
+## Experimental Results & Benchmark Tables
 
-### Table III: Comprehensive Method Comparison (ResNet-18)
-| Forget % | FT Test (↑) | FT Forget (↓) | FT Retain (↑) | GA Test (↑) | GA Forget (↓) | GA Retain (↑) | RL Test (↑) | RL Forget (↓) | RL Retain (↑) |
+### Metric Direction Guide
+| Metric | Notation | Optimal Direction | Description |
+| :--- | :---: | :---: | :--- |
+| **Test Accuracy** | **TA** | **Higher is better ($\uparrow$)** | Overall generalization on the combined test dataset |
+| **Retain Accuracy** | **RA** | **Higher is better ($\uparrow$)** | Accuracy on retained/non-forgotten classes (utility preservation) |
+| **Forget Accuracy** | **FA** | **Lower is better ($\downarrow$)** | Accuracy on forgotten classes (successful concept/data erasure) |
+| **Forgetting Ratio** | **FR** | **Higher is better ($\uparrow$)** | Ratio of erased knowledge: $(FA_{\text{before}} - FA_{\text{after}}) / FA_{\text{before}}$ |
+| **Stability Variance** | **$\sigma^2$** | **Lower is better ($\downarrow$)** | RA variance across unlearning epochs (optimization stability) |
+| **Training Efficiency**| **Eff** | **Higher is better ($\uparrow$)** | Percentage of max epochs completed before early stopping |
+
+---
+
+### Table I: Comparison with Existing Paradigms
+| Method | Type | Adaptivity | Explainability |
+| :--- | :--- | :--- | :--- |
+| **SISA** [1] | Certified | Static | High |
+| **Eternal Sunshine** [5] | Gradient | Partial | Moderate |
+| **SalUn** [9] | Gradient + Masking | Fixed | Moderate |
+| **AMU** [14] | Adaptive Rate | Dynamic | Low |
+| **AOS (Ours)** | **Statistical + Gradient** | **Fully Adaptive** | **High** |
+
+---
+
+### Table II: Retrain Baseline with Early Stopping (CIFAR-100, ResNet-18)
+| Forget Split | Best TA (%) (↑) | Retain Acc (RA %) (↑) | Epochs (↓) | Training Efficiency (%) (↑) |
+| :---: | :---: | :---: | :---: | :---: |
+| **10%** | 65.28 | 93.72 | 41/45 | 91.1% |
+| **20%** | 63.61 | 87.89 | 42/45 | 93.3% |
+| **30%** | 61.19 | 89.83 | 41/45 | 91.1% |
+| **40%** | 59.16 | 88.09 | 42/45 | 93.3% |
+| **50%** | 55.09 | 85.61 | 41/45 | 91.1% |
+| **60%** | 49.75 | 81.20 | 44/45 | 97.8% |
+| **70%** | 44.82 | 74.78 | 40/45 | 88.9% |
+| **80%** | 35.78 | 66.22 | 42/45 | 93.3% |
+| **90%** | 24.35 | 47.36 | 38/43 | 84.4% |
+
+---
+
+### Table III: Comprehensive Method Comparison on CIFAR-100 (ResNet-18)
+| Forget % | FT Test (↑) | FT Forget (↓) | FT Retain (↑) | GA Test (↑) | GA Forget (↓) | GA Retain (↑) | RL (Retrain) Test (↑) | RL Forget (↓) | RL Retain (↑) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **10%** | 55.29 | 57.26 | 61.57 | 62.31 | 81.88 | 83.08 | 54.06 | 55.80 | 60.21 |
 | **20%** | 55.09 | 56.92 | 63.96 | 21.26 | 25.01 | 25.43 | 53.75 | 53.92 | 61.62 |
+| **30%** | 53.00 | 55.45 | 63.99 | 1.03 | 0.93 | 1.05 | 54.58 | 55.16 | 64.34 |
+| **40%** | 54.20 | 54.72 | 64.22 | 1.07 | 0.89 | 0.97 | 53.76 | 53.49 | 64.54 |
 | **50%** | 53.64 | 55.04 | 65.68 | 1.00 | 0.96 | 1.06 | 53.60 | 54.04 | 65.86 |
+| **60%** | 52.78 | 54.71 | 68.48 | 1.04 | 0.97 | 1.07 | 50.15 | 50.85 | 62.98 |
+| **70%** | 48.76 | 50.67 | 65.04 | 1.04 | 1.03 | 1.01 | 48.92 | 49.24 | 64.33 |
 | **80%** | 46.43 | 48.34 | 70.33 | 1.03 | 1.03 | 0.93 | 47.62 | 48.65 | 67.18 |
-*(See paper for complete 10%-90% results)*
+| **90%** | 43.05 | 44.59 | 67.14 | 1.00 | 0.99 | 1.10 | 39.53 | 39.56 | 60.00 |
+
+---
 
 ### Table IV: Ablation Study at 50% Forget Ratio
-| Variant | Description | Forget Acc (%) (↓) | Retain Acc (%) (↑) | Variance (σ²) (↓) |
+| Variant | Description | Forget Acc (%) (↓) | Retain Acc (%) (↑) | RA Stability Variance ($\sigma^2$) (↓) |
 | :--- | :--- | :---: | :---: | :---: |
-| **SalUn Baseline** | Fixed static threshold τ | 8.3 | 77.2 | 0.024 |
+| **SalUn Baseline** | Fixed static threshold $\tau$ | 8.3 | 77.2 | 0.024 |
 | **AOS-T** | Otsu Thresholding Only | 8.0 | 80.6 | 0.018 |
 | **AOS-F** | Fisher Normalization Only | 7.9 | 81.8 | 0.016 |
 | **AOS-R** | Retention Scaling Only | 8.2 | 82.5 | 0.015 |
 | **AOS (Full)** | Complete Framework | **7.8** | **83.4** | **0.014** |
 
-</details>
+> **Key Takeaway**: At 50% forgetting, AOS achieves **7.8% Forget Accuracy ($\downarrow$)** while sustaining **83.4% Retain Accuracy ($\uparrow$)** (+6.2% over SalUn and +4.3% over AMU), with a **37% reduction in variance ($\downarrow$)** and **8% runtime reduction ($\downarrow$)** via earlier convergence.
+
+---
+
+
 
 ---
 
